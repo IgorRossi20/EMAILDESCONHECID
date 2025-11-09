@@ -214,9 +214,11 @@ function renderCompose() {
     <div class="ta-actions">
       <button id="ta-copy-text">Copiar texto</button>
       <button id="ta-copy">Copiar link anônimo</button>
-      <button id="ta-whatsapp">Enviar via WhatsApp</button>
-      <button id="ta-email">Enviar por E-mail</button>
-      <button id="ta-sms">Enviar por SMS</button>
+      <button id="ta-whatsapp">Enviar via WhatsApp (do seu dispositivo)</button>
+      <button id="ta-email">Enviar por E-mail (do seu dispositivo)</button>
+      <button id="ta-email-platform">Enviar por E-mail Anônimo (via plataforma)</button>
+      <button id="ta-sms-platform">Enviar por SMS Anônimo (via plataforma)</button>
+      <button id="ta-sms">Enviar por SMS (do seu dispositivo)</button>
     </div>
 
     <p class="ta-disclaimer">Sigilo garantido: o link não revela quem enviou. Você escolhe como compartilhar (WhatsApp, SMS, e-mail, etc.).</p>
@@ -298,6 +300,8 @@ function renderCompose() {
   const waBtn = container.querySelector('#ta-whatsapp')
   const emailBtn = container.querySelector('#ta-email')
   const smsBtn = container.querySelector('#ta-sms')
+  const emailPlatformBtn = container.querySelector('#ta-email-platform')
+  const smsPlatformBtn = container.querySelector('#ta-sms-platform')
 
   function currentMessage() { return applyPositive(input.value.trim()) }
 
@@ -381,6 +385,64 @@ function renderCompose() {
     const ok = await copyToClipboard(msg)
     copyTextBtn.textContent = ok ? 'Texto copiado!' : 'Não foi possível copiar'
     setTimeout(() => (copyTextBtn.textContent = 'Copiar texto'), 2000)
+  })
+
+  function postJSON(url, data) {
+    const API_BASE = window.location.origin.includes('5173') ? 'http://localhost:8787' : ''
+    const target = url.startsWith('/api') ? `${API_BASE}${url}` : url
+    return fetch(target, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(async (r) => {
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(json.error || `Erro ${r.status}`)
+      return json
+    })
+  }
+
+  emailPlatformBtn.addEventListener('click', async () => {
+    const email = await showPrompt({
+      title: 'Enviar por E-mail Anônimo (via plataforma)',
+      label: 'E-mail do destinatário',
+      placeholder: 'exemplo@dominio.com',
+      type: 'email',
+      okText: 'Enviar',
+      validate: (value) => (isValidEmail(value) ? { value } : { error: 'Informe um e-mail válido.' })
+    })
+    if (!email) return
+    const link = buildShareLink(currentMessage())
+    const body = `Alguém que se importa quer te dar um toque:\n\n${link}\n\n(Abra o link para ler a mensagem.)`
+    try {
+      const res = await postJSON('/api/send/email', { to: email, message: body })
+      emailPlatformBtn.textContent = 'E-mail anônimo enviado!'
+      setTimeout(() => (emailPlatformBtn.textContent = 'Enviar por E-mail Anônimo (via plataforma)'), 2500)
+    } catch (e) {
+      emailPlatformBtn.textContent = e.message.includes('não configurado') ? 'Backend não configurado' : 'Falha ao enviar'
+      setTimeout(() => (emailPlatformBtn.textContent = 'Enviar por E-mail Anônimo (via plataforma)'), 2500)
+    }
+  })
+
+  smsPlatformBtn.addEventListener('click', async () => {
+    const phone = await showPrompt({
+      title: 'Enviar por SMS Anônimo (via plataforma)',
+      label: 'Número do destinatário (inclua DDI, ex.: +55...)',
+      placeholder: '+5511999999999',
+      type: 'tel',
+      okText: 'Enviar',
+      validate: normalizePhoneForWhatsApp
+    })
+    if (!phone) return
+    const link = buildShareLink(currentMessage())
+    const body = `Toque Anônimo: ${link}`
+    try {
+      const res = await postJSON('/api/send/sms', { to: `+${phone}`, message: body })
+      smsPlatformBtn.textContent = 'SMS anônimo enviado!'
+      setTimeout(() => (smsPlatformBtn.textContent = 'Enviar por SMS Anônimo (via plataforma)'), 2500)
+    } catch (e) {
+      smsPlatformBtn.textContent = e.message.includes('não configurado') ? 'Backend não configurado' : 'Falha ao enviar'
+      setTimeout(() => (smsPlatformBtn.textContent = 'Enviar por SMS Anônimo (via plataforma)'), 2500)
+    }
   })
 }
 
