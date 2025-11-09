@@ -185,3 +185,55 @@ textarea#ta-input {
   border: 1px solid #646cff;
   color: inherit;
 }
+
+/* Modal */
+.ta-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.ta-modal {
+  width: min(520px, 92vw);
+  background: #1a1a1a;
+  color: inherit;
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  padding: 1rem;
+}
+@media (prefers-color-scheme: light) {
+  .ta-modal { background: #fff; }
+}
+.ta-modal-title {
+  margin: 0 0 0.5rem 0;
+}
+.ta-modal-label {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+.ta-modal-input {
+  width: 100%;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #3a3a3a;
+  background: inherit;
+  color: inherit;
+}
+.ta-modal-error {
+  color: #e57373;
+  margin-top: 0.5rem;
+  min-height: 1.25rem;
+}
+.ta-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+.ta-btn-secondary {
+  border: 1px solid #3a3a3a;
+}

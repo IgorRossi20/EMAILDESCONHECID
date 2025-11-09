@@ -98,6 +98,82 @@ async function shareNative({ title, text, url }) {
   return false
 }
 
+function showPrompt({ title, label, placeholder = '', initialValue = '', type = 'text', okText = 'Enviar', validate }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.className = 'ta-modal-overlay'
+    const modal = document.createElement('div')
+    modal.className = 'ta-modal'
+    modal.innerHTML = `
+      <h3 class="ta-modal-title">${title}</h3>
+      <label class="ta-modal-label">${label}</label>
+      <input class="ta-modal-input" type="${type}" placeholder="${placeholder}" value="${initialValue}" />
+      <div class="ta-modal-error" id="ta-modal-error"></div>
+      <div class="ta-modal-actions">
+        <button class="ta-btn ta-btn-secondary" id="ta-cancel">Cancelar</button>
+        <button class="ta-btn" id="ta-ok">${okText}</button>
+      </div>
+    `
+    overlay.appendChild(modal)
+    document.body.appendChild(overlay)
+    const input = modal.querySelector('.ta-modal-input')
+    const err = modal.querySelector('#ta-modal-error')
+    const ok = modal.querySelector('#ta-ok')
+    const cancel = modal.querySelector('#ta-cancel')
+
+    function close(value) {
+      document.body.removeChild(overlay)
+      resolve(value)
+    }
+    function runValidate() {
+      if (typeof validate === 'function') {
+        const v = validate(input.value)
+        if (v && v.error) {
+          err.textContent = v.error
+          return null
+        }
+        return v && v.value !== undefined ? v.value : input.value
+      }
+      return input.value
+    }
+    ok.addEventListener('click', () => {
+      const val = runValidate()
+      if (val === null) return
+      close(val)
+    })
+    cancel.addEventListener('click', () => close(null))
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const val = runValidate()
+        if (val === null) return
+        close(val)
+      } else if (e.key === 'Escape') {
+        close(null)
+      }
+    })
+    input.focus()
+  })
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function normalizePhoneForWhatsApp(raw) {
+  const hasPlus = /^\s*\+/.test(raw)
+  const digits = (raw || '').replace(/\D/g, '')
+  if (!digits) return { error: 'Informe um número.' }
+  // If looks like BR local (11 digits), assume +55
+  let normalized = digits
+  if (!hasPlus && digits.length === 11) {
+    normalized = '55' + digits
+  }
+  if (normalized.length < 12 || normalized.length > 15) {
+    return { error: 'Inclua DDI (ex.: +55...) e apenas números.' }
+  }
+  return { value: normalized }
+}
+
 function escapeHtml(str) {
   return str.replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]))
 }
@@ -237,13 +313,19 @@ function renderCompose() {
   })
 
   waBtn.addEventListener('click', async () => {
+    const phone = await showPrompt({
+      title: 'Enviar via WhatsApp',
+      label: 'Número do destinatário (inclua DDI, ex.: +55...)',
+      placeholder: '+5511999999999',
+      type: 'tel',
+      okText: 'Enviar',
+      validate: normalizePhoneForWhatsApp
+    })
+    if (!phone) return
     const link = buildShareLink(currentMessage())
     const text = `💬 Toque Anônimo:\n${link}`
-    const shared = await shareNative({ title: 'Toque Anônimo', text, url: link })
-    if (shared) return
-    const url = isMobile()
-      ? `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
-      : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`
+    const base = isMobile() ? 'https://api.whatsapp.com/send' : 'https://web.whatsapp.com/send'
+    const url = `${base}?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(text)}`
     openInNewTab(url)
     const copied = await copyToClipboard(text)
     waBtn.textContent = copied ? 'Abrimos WhatsApp (texto copiado)' : 'Abrimos WhatsApp — copie e cole'
@@ -251,20 +333,22 @@ function renderCompose() {
   })
 
   emailBtn.addEventListener('click', async () => {
+    const email = await showPrompt({
+      title: 'Enviar por E-mail',
+      label: 'E-mail do destinatário',
+      placeholder: 'exemplo@dominio.com',
+      type: 'email',
+      okText: 'Enviar',
+      validate: (value) => (isValidEmail(value) ? { value } : { error: 'Informe um e-mail válido.' })
+    })
+    if (!email) return
     const link = buildShareLink(currentMessage())
     const subject = 'Toque Anônimo'
     const body = `Alguém que se importa quer te dar um toque:\n\n${link}\n\n(Abra o link para ler a mensagem.)`
-    const shared = await shareNative({ title: subject, text: body, url: link })
-    if (!shared) {
-      const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-      tryLaunchProtocol(url)
-    }
-    try {
-      await navigator.clipboard.writeText(body)
-      emailBtn.textContent = 'Abrimos seu e-mail (conteúdo copiado)'
-    } catch {
-      emailBtn.textContent = 'Se não abrir, copie e cole o texto'
-    }
+    const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    tryLaunchProtocol(url)
+    const copied = await copyToClipboard(body)
+    emailBtn.textContent = copied ? 'Abrimos e-mail (conteúdo copiado)' : 'Abrimos e-mail — copie e cole'
     setTimeout(() => (emailBtn.textContent = 'Enviar por E-mail'), 2500)
   })
 
